@@ -312,3 +312,16 @@ Developed as a Java networking project demonstrating TCP socket communication, J
 
 No license has been specified for this repository.
 
+## UML Diagrams
+
+### Class Diagram
+
+![UML Class Diagram](docs/class-diagram.png)
+
+[View editable PlantUML source](docs/class-diagram.puml)
+
+### Deployment Diagram
+
+![UML Deployment Diagram](docs/deployment-diagram.png)
+
+[View editable PlantUML source](docs/deployment-diagram.puml)
