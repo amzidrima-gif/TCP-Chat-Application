@@ -1,0 +1,20 @@
+# Maven build output
+target/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Compiled Java files and output
+out/
+*.class
+
+# Logs
+*.log
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Maven Shade generated file
+dependency-reduced-pom.xml
