@@ -1,0 +1,120 @@
+@startuml deployment-diagram
+title TCP Chat Application – UML Deployment Diagram
+
+skinparam shadowing false
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 12
+skinparam nodesep 50
+skinparam ranksep 70
+skinparam note {
+  BackgroundColor #FFFBE6
+  BorderColor #B59B00
+}
+skinparam artifact {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+}
+skinparam node {
+  BackgroundColor #F5F5F5
+}
+skinparam component {
+  BackgroundColor #FFFFFF
+}
+
+' Artifacts whose existence/content could NOT be verified from the uploaded files
+skinparam artifact<<unverified>> {
+  BackgroundColor #EEEEEE
+  BorderColor #888888
+  FontColor #555555
+}
+
+legend bottom
+  |= Notation |= Meaning |
+  | White artifact | Derived from inspected source or pom.xml |
+  | Grey artifact  | Not provided; existence/content unverified |
+  | Red line       | TCP connection (network) |
+endlegend
+
+' ===============================================================
+' CLIENT NODE
+' ===============================================================
+node "Client machine\n(1..* instances may run, one JVM per client)" as ClientNode <<device>> {
+
+  node "Java runtime (JDK/JRE 22)\n+ JavaFX 22.0.2 (javafx-controls)" as ClientJVM <<execution environment>> {
+    component "ChatClientApp\n(JavaFX client UI)" as CApp
+    component "ClientConnection\n(client networking)" as CConn
+  }
+
+  artifact "TCPClient-1.0-SNAPSHOT.jar\n(default name from pom: artifactId-version;\nthin JAR, manifest Main-Class =\norg.example.ChatClientApp)" as ClientJar
+  artifact "config/client.properties\n(optional external file)" as ClientExtCfg <<unverified>>
+  artifact "client.properties\n(classpath resource fallback)" as ClientResCfg <<unverified>>
+}
+
+' ===============================================================
+' SERVER NODE
+' ===============================================================
+node "Server machine" as ServerNode <<device>> {
+
+  node "Java runtime (JDK/JRE 22)\n+ JavaFX 22.0.2 (javafx-controls)\n(single server process)" as ServerJVM <<execution environment>> {
+    component "ServerConfig" as SCfg
+    component "ChatServer\n(server networking;\nServerSocket + virtual thread per client)" as SSrv
+    component "ServerDashboard\n(JavaFX dashboard, same process;\nonly when started via ServerDashboard)" as SDash
+  }
+
+  artifact "TCPServer-1.0-SNAPSHOT.jar\n(default name from pom: artifactId-version;\nthin JAR, manifest Main-Class =\norg.example.Main)" as ServerJar
+  artifact "config/server.properties\n(optional external file)" as ServerExtCfg <<unverified>>
+  artifact "server.properties\n(classpath resource fallback)" as ServerResCfg <<unverified>>
+}
+
+' ---------------------------------------------------------------
+' Manifestation: artifacts -> components
+' ---------------------------------------------------------------
+ClientJar ..> CApp  : <<manifest>>
+ClientJar ..> CConn : <<manifest>>
+ServerJar ..> SCfg  : <<manifest>>
+ServerJar ..> SSrv  : <<manifest>>
+ServerJar ..> SDash : <<manifest>>
+
+' ---------------------------------------------------------------
+' Configuration files read at start-up
+' ---------------------------------------------------------------
+CApp ..> ClientExtCfg : <<reads>> (preferred)
+CApp ..> ClientResCfg : <<reads>> (fallback)
+SCfg ..> ServerExtCfg : <<reads>> (preferred)
+SCfg ..> ServerResCfg : <<reads>> (fallback)
+
+' ---------------------------------------------------------------
+' In-process relationships (within one JVM)
+' ---------------------------------------------------------------
+CApp --> CConn : uses
+SDash --> SSrv : creates, runs in\nvirtual thread
+SSrv --> SCfg : uses
+
+' ---------------------------------------------------------------
+' Network communication
+' ---------------------------------------------------------------
+CConn -[#C00000,bold]- SSrv : "<<TCP>> (line-based text)\nclient connects to server.host:server.port\nserver binds to server.host:server.port\n(defaults: localhost:3000)"
+
+' ---------------------------------------------------------------
+' Notes
+' ---------------------------------------------------------------
+note bottom of ServerNode
+  Two entry points exist in the server project:
+  • org.example.Main - headless; ServerConfig +
+    ChatServer.start() on the main thread (no dashboard).
+  • org.example.ServerDashboard - JavaFX Application;
+    starts ChatServer in a virtual thread.
+  The dashboard is NOT a separate process; it shares
+  the server JVM.
+end note
+
+note bottom of ClientNode
+  The POMs contain no shade/assembly configuration,
+  so JavaFX is NOT bundled in the JARs. A Java 22
+  runtime with JavaFX 22.0.2 must be supplied
+  (e.g. via mvn javafx:run). Whether the JARs were
+  actually built or distributed cannot be verified
+  from the files provided.
+end note
+
+@enduml

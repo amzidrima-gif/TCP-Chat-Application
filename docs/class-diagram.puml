@@ -1,0 +1,197 @@
+@startuml class-diagram
+title TCP Chat Application – UML Class Diagram (derived from source code)
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 12
+skinparam packageStyle rectangle
+skinparam nodesep 50
+skinparam ranksep 60
+skinparam class {
+  BackgroundColor #FFFFFF
+  BorderColor #333333
+  ArrowColor #333333
+}
+skinparam package {
+  BorderColor #555555
+  FontStyle bold
+}
+skinparam note {
+  BackgroundColor #FFFBE6
+  BorderColor #B59B00
+}
+
+' ---------------------------------------------------------------
+' External JavaFX type (only the base class that is actually extended)
+' ---------------------------------------------------------------
+class "Application" as FxApplication <<javafx.application>> {
+}
+
+' ===============================================================
+' CLIENT SIDE  -  Maven project "TCPClient"
+' ===============================================================
+package "TCPClient (Maven project)  ::  package org.example" as ClientPkg #EAF2FB {
+
+  class "Main" as ClientMain {
+    + {static} main(args : String[]) : void
+  }
+
+  class ChatClientApp {
+    - client : ClientConnection
+    - serverHost : String
+    - serverPort : int
+    - username : String
+    - statusLabel : Label
+    - connectionIndicator : Label
+    - chatArea : TextArea
+    - usersList : ListView<String>
+    - usernameField : TextField
+    - messageField : TextField
+    - connectButton : Button
+    - sendButton : Button
+    - connected : boolean <<volatile>>
+    - readOnly : boolean <<volatile>>
+    - closing : boolean
+    --
+    + start(stage : Stage) : void
+    - loadConfiguration() : void  <<throws IOException>>
+    - applyCommandLineArguments() : void
+    - validatePort(port : int) : void
+    - connectToServer() : void
+    - handleServerMessage(message : String) : void
+    - updateUsersList(users : String) : void
+    - sendMessage() : void
+    - disconnectFromServer() : void
+    - appendMessage(message : String) : void
+    - showError(title : String, message : String) : void
+    + {static} main(args : String[]) : void
+  }
+
+  class ClientConnection {
+    - socket : Socket
+    - output : PrintWriter
+    - input : BufferedReader
+    --
+    + connect(host : String, port : int, username : String,\n    onMessage : Consumer<String>) : void  <<throws IOException>>
+    + sendMessage(message : String) : void
+    + disconnect() : void
+  }
+}
+
+' ===============================================================
+' SERVER SIDE  -  Maven project "TCPServer"
+' ===============================================================
+package "TCPServer (Maven project)  ::  package org.example" as ServerPkg #EAF7EA {
+
+  class "Main" as ServerMain {
+    + {static} main(args : String[]) : void
+  }
+
+  class ServerDashboard {
+    - activityLog : TextArea
+    - usersList : ListView<String>
+    - statusLabel : Label
+    - chatServer : ChatServer
+    - userColors : ConcurrentHashMap<String, String> <<final>>
+    --
+    + start(stage : Stage) : void
+    - startServer() : void
+    - appendLog(message : String) : void
+    - updateUsers(usernames : List<String>) : void
+    - randomColor() : String
+    + {static} main(args : String[]) : void
+  }
+
+  class ChatServer {
+    - config : ServerConfig <<final>>
+    - clients : ConcurrentHashMap<Socket, ClientHandler> <<final>>
+    - guestCounter : AtomicInteger <<final>>
+    - {static} TIME_FORMAT : DateTimeFormatter <<final>>
+    - logListener : Consumer<String>
+    - usersListener : Consumer<List<String>>
+    --
+    + ChatServer(config : ServerConfig)
+    + setEventListeners(logListener : Consumer<String>,\n    usersListener : Consumer<List<String>>) : void
+    + start() : void
+    - handleClient(socket : Socket) : void
+    - broadcast(message : String) : void
+    - getActiveUsers() : String
+    + getActiveUsernames() : List<String>
+    - notifyUsers() : void
+    - log(message : String) : void
+  }
+
+  class "ClientHandler" as ClientHandler <<private static nested class of ChatServer>> {
+    - socket : Socket <<final>>
+    - username : String <<final>>
+    - output : PrintWriter <<final>>
+    - readOnly : boolean <<final>>
+    --
+    - ClientHandler(socket : Socket, username : String,\n    output : PrintWriter, readOnly : boolean)
+  }
+
+  class ServerConfig {
+    - host : String <<final>>
+    - port : int <<final>>
+    --
+    + ServerConfig()  <<throws IOException>>
+    + getHost() : String
+    + getPort() : int
+  }
+}
+
+' ---------------------------------------------------------------
+' Inheritance (generalization)
+' ---------------------------------------------------------------
+ChatClientApp -up-|> FxApplication
+ServerDashboard -up-|> FxApplication
+
+' ---------------------------------------------------------------
+' Client-side relationships
+' ---------------------------------------------------------------
+ClientMain .down.> ChatClientApp : <<use>>\nApplication.launch(...)
+ChatClientApp "1" *-down- "0..1" ClientConnection : client
+
+' ---------------------------------------------------------------
+' Server-side relationships
+' ---------------------------------------------------------------
+ServerMain .down.> ServerConfig : <<create>>
+ServerMain .down.> ChatServer : <<create>>, start()
+ServerDashboard "1" *-down- "0..1" ChatServer : chatServer
+ServerDashboard .down.> ServerConfig : <<create>>
+ChatServer "1" o-right-> "1" ServerConfig : config
+ChatServer "1" *-down- "0..*" ClientHandler : clients
+
+' ---------------------------------------------------------------
+' Network communication (NOT an in-process object association)
+' ---------------------------------------------------------------
+ClientConnection .[#C00000,bold]right.> ChatServer : <<TCP connection>>
+note on link #FFFFFF
+  Network communication only:
+  separate processes, no shared
+  classes or object references.
+  Newline-terminated text lines
+  over a TCP socket.
+end note
+
+' ---------------------------------------------------------------
+' Notes
+' ---------------------------------------------------------------
+
+
+
+
+
+legend bottom
+  <b>Threading and callbacks (verified in source)</b>
+  • ClientConnection.connect(...) starts one virtual thread that reads lines and calls onMessage.accept(...);
+     ChatClientApp passes this::handleServerMessage and uses Platform.runLater(...) to update the UI.
+  • ChatServer.start() binds a ServerSocket to config host:port, loops on accept(), and handles each Socket
+     in its own virtual thread (handleClient).
+  • ServerDashboard runs ChatServer.start() in a virtual thread inside the same JVM process; it registers
+     Consumer callbacks via setEventListeners(...), so ChatServer has no compile-time dependency on ServerDashboard.
+  • Both projects declare a class named Main (shown twice); they are in separate Maven projects.
+endlegend
+
+@enduml
